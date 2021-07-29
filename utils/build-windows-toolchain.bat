@@ -24,6 +24,11 @@ subst T: /d
 subst T: %BuildRoot% || (exit /b)
 set BuildRoot=T:
 
+:: Identify the PackageRoot
+set PackageRoot=%BuildRoot%\package
+
+md %PackageRoot%
+
 :: Identify the InstallRoot
 set InstallRoot=%BuildRoot%\Library\Developer\Toolchains\unknown-Asserts-development.xctoolchain\usr
 set PlatformRoot=%BuildRoot%\Library\Developer\Platforms\Windows.platform
@@ -584,6 +589,17 @@ cmake --build %BuildRoot%\15 --target install || (exit /b)
 python -c "import plistlib; print(str(plistlib.dumps({ 'DefaultProperties': { 'DEFAULT_USE_RUNTIME': 'MD' } }), encoding='utf-8'))" > %SDKInstallRoot%\SDKSettings.plist
 :: TODO(compnerd) match the XCTest installation name
 python -c "import plistlib; print(str(plistlib.dumps({ 'DefaultProperties': { 'XCTEST_VERSION': 'development' } }), encoding='utf-8'))" > %PlatformRoot%\Info.plist
+
+:: Package toolchain.msi
+msbuild %SourceRoot%\swift-installer-scripts\platforms\Windows\toolchain.wixproj -p:RunWixToolsOutOfProc=true -p:OutputPath=%PackageRoot%\toolchain\ -p:IntermediateOutputPath=%PackageRoot%\toolchain\ -p:TOOLCHAIN_ROOT=%BuildRoot%\Library\Developer\Toolchains\unknown-Asserts-development.xctoolchain
+:: TODO(compnerd) actually perform the code-signing
+:: signtool sign /f Apple_CodeSign.pfx /p Apple_CodeSign_Password /tr http://timestamp.digicert.com /fd sha256 %PackageRoot%\toolchain\toolchain.msi
+
+:: Package sdk.msi
+msbuild %SourceRoot%\swift-installer-scripts\platforms\Windows\CustomActions\SwiftInstaller\SwiftInstaller.vcxproj -t:restore
+msbuild %SourceRoot%\swift-installer-scripts\platforms\Windows\sdk.wixproj -p:RunWixToolsOutOfProc=true -p:OutputPath=%PackageRoot%\sdk\ -p:IntermediateOutputPath=%PackageRoot%\sdk\ -p:PLATFORM_ROOT=%PlatformRoot%\ -p:SDK_ROOT=%SDKInstallRoot%\ -p:PlatformToolset=v142
+:: TODO(compnerd) actually perform the code-signing
+:: signtool sign /f Apple_CodeSign.pfx /p Apple_CodeSign_Password /tr http://timestamp.digicert.com /fd sha256 %PackageRoot%\sdk\sdk.msi
 
 :: Clean up the module cache
 rd /s /q %LocalAppData%\clang\ModuleCache
